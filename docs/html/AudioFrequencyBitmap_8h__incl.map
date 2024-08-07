@@ -1,0 +1,11 @@
+<map id="/Users/mimir/tegra/QuackHead/include/audio/AudioFrequencyBitmap.h" name="/Users/mimir/tegra/QuackHead/include/audio/AudioFrequencyBitmap.h">
+<area shape="rect" id="Node000001" title=" " alt="" coords="49,5,224,61"/>
+<area shape="rect" id="Node000002" title=" " alt="" coords="5,109,76,135"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="108,63,67,100,63,96,105,59"/>
+<area shape="rect" id="Node000003" title=" " alt="" coords="99,109,174,135"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="139,61,139,93,134,93,134,61"/>
+<area shape="rect" id="Node000004" href="$CTFFT_8h.html" title=" " alt="" coords="198,109,270,135"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="169,59,211,96,207,100,165,63"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="203,183,264,208"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="236,135,236,167,231,167,231,135"/>
+</map>

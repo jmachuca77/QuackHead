@@ -1,0 +1,27 @@
+var classInfinityEye =
+[
+    [ "InfinityEye", "classInfinityEye.html#acc94eeb16a2f1714a159ac9624b0fad2", null ],
+    [ "animate", "classInfinityEye.html#a547b3160b4d40531407a377a746bc579", null ],
+    [ "normalBlink", "classInfinityEye.html#af246221f97b040e16ce3c90092c0f3dc", null ],
+    [ "rapidBlink", "classInfinityEye.html#a49d72288a0733db769feb873f6d17279", null ],
+    [ "reset", "classInfinityEye.html#ab44aae8519e51c563b13525b707e5202", null ],
+    [ "setBlinkTime", "classInfinityEye.html#a7e8cbd316bb8b840af52507fd63f86a8", null ],
+    [ "setOffColor", "classInfinityEye.html#a0f740e05a2227292b0ca91469a8e2cdf", null ],
+    [ "setOnColor", "classInfinityEye.html#a0853a61df30ce8f6a19d7eccb853bd8c", null ],
+    [ "setup", "classInfinityEye.html#aef67230936388de71e77d146be79ba8d", null ],
+    [ "showState", "classInfinityEye.html#aa74f8f9afdaced5cad41ea86fc09ee45", null ],
+    [ "syncWith", "classInfinityEye.html#a8b809d039a1a6699af14e3ed1993e1a6", null ],
+    [ "fInterval", "classInfinityEye.html#ac253cde5c74bc29a246c1b4a834f932c", null ],
+    [ "fMaxBlinkDelay", "classInfinityEye.html#a49ed839a2688c858db5daa013d95a011", null ],
+    [ "fMaxCloseTime", "classInfinityEye.html#a0a0ba6f06d510991aea5f1c9ac4d27f8", null ],
+    [ "fMinBlinkDelay", "classInfinityEye.html#a22a94fa4b9bda1676c78a4cdc32bc4e1", null ],
+    [ "fMinCloseTime", "classInfinityEye.html#a46ce9bbea1fd9d07a76f13390b56642a", null ],
+    [ "fNextTime", "classInfinityEye.html#a7707739508b83faab167ddd2f248e8c9", null ],
+    [ "fOffColor", "classInfinityEye.html#ac069e433c99b3367699c0dfa51c38b17", null ],
+    [ "fOnColor", "classInfinityEye.html#ae0dc220da3c47289e596ca9835df7227", null ],
+    [ "fPassive", "classInfinityEye.html#a862560ff2c28e63a749c106ec381cdbc", null ],
+    [ "fRapidBlink", "classInfinityEye.html#a3fcce9d3085fa00e7d383d739118ae17", null ],
+    [ "fRapidBlinkCount", "classInfinityEye.html#a4b1a6e5b334b3bcb5275e9ea77e24813", null ],
+    [ "fState", "classInfinityEye.html#a8c5a115280d98bc87c7332c76edbe2f3", null ],
+    [ "fSyncEye", "classInfinityEye.html#ac4b3acf3e5be384fb59b9aa0ef30c443", null ]
+];

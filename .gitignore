@@ -1,0 +1,14 @@
+.pio
+.build
+.DS_Store
+.DS_Store?
+.Spotlight-V100
+.Trashes
+.vs/
+.vscode
+.build
+*.*.bak
+*.orig
+*.sublime-workspace
+._*
+configs/*/local.*
