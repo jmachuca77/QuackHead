@@ -11,11 +11,11 @@
 
 class LCDEye : public AnimatedEvent, public SetupEvent {
 public:
-    LCDEye(int csPin, int resolutionX = 240, int resolutionY = 240) 
-        : tft(new TFT_eSPI(resolutionX, resolutionY)), chipSelectPin(csPin) {}
-
-    ~LCDEye() {
-        delete tft;
+    LCDEye(int numEyes, const int* csPins, int resolutionX = 240, int resolutionY = 240) 
+        : tft(TFT_eSPI(resolutionX, resolutionY)), numEyes(numEyes) {
+        for (int i = 0; i < numEyes; i++) {
+            chipSelectPins[i] = csPins[i];
+        }
     }
 
     void syncWith(LCDEye* otherEye) {
@@ -80,12 +80,14 @@ public:
     }
 
     virtual void setup() override {
-        tft->begin();
-        tft->setRotation(0);
-        pinMode(chipSelectPin, OUTPUT);
-        digitalWrite(chipSelectPin, LOW);
-        clearScreen(fOffColor);
-        digitalWrite(chipSelectPin, HIGH);
+        tft.begin();
+        tft.setRotation(0);
+        for (int i = 0; i < numEyes; i++) {
+            pinMode(chipSelectPins[i], OUTPUT);
+            digitalWrite(chipSelectPins[i], LOW);
+            clearScreen(fOffColor);
+            digitalWrite(chipSelectPins[i], HIGH);  // Ensure all are disabled initially
+        }
         printf("LCD SETUP\n");
     }
 
@@ -129,8 +131,9 @@ public:
     }
 
 protected:
-    TFT_eSPI* tft;
-    int chipSelectPin;
+    TFT_eSPI tft;
+    int numEyes;
+    int chipSelectPins[2];  // Supports up to 2 eyes
     int fState;
     bool fPassive;
     bool fRapidBlink;
@@ -146,16 +149,19 @@ protected:
     LCDEye* fSyncEye = nullptr;
 
     void clearScreen(uint16_t color) {
-        tft->fillScreen(color);
+        tft.fillScreen(color);
     }
 
     void showState(int state, uint16_t offColor, uint16_t onColor) {
-        digitalWrite(chipSelectPin, LOW);
-        if (state <= 8) {
-            clearScreen(offColor);
-        } else {
-            clearScreen(onColor);
+        for (int i = 0; i < numEyes; i++) {
+            //printf("LCD %d SHOW %d\n", i, state);
+            digitalWrite(chipSelectPins[i], LOW);
+            if (state <= 8) {
+                clearScreen(offColor);
+            } else {
+                clearScreen(onColor);
+            }
+            digitalWrite(chipSelectPins[i], HIGH);
         }
-        digitalWrite(chipSelectPin, HIGH);
     }
 };

@@ -44,7 +44,13 @@
 #else
 #include "head/FlashLightPWM.h"
 #endif
+
+#ifdef LCD_EYES
+#include "head/LCDEye.h"
+#else
 #include "head/InfinityEye.h"
+#endif
+
 #include "head/IMU.h"
 
 ////////////////////////////////
@@ -216,8 +222,14 @@ ServoDispatchPCA9685<SizeOfArray(servoSettings)> servoDispatch(servoSettings);
 
 ////////////////////////////////
 
+#ifdef LCD_EYES
+int csPins[2] = { LEFT_EYE_PIN , RIGHT_EYE_PIN };
+LCDEye Eyes(2,csPins);
+#else
 InfinityEye leftEye(LEFT_EYE_PIN);
 InfinityEye rightEye(RIGHT_EYE_PIN);
+#endif
+
 #ifdef FLASHLIGHT_RGB
 FlashLightRGB flashLight(FLASHLIGHT_RGB);
 #else
@@ -241,7 +253,7 @@ bool getSDCardMounted()
 bool mountSDFileSystem()
 {
     SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
-    if (SD.begin(SD_CS_PIN, SPI, 4000000, "/sd", MAX_OPEN_FILES/*, false*/))
+    if (SD.begin(SD_CS_PIN, SPI, 40000000, "/sd", MAX_OPEN_FILES/*, false*/))
     {
         DEBUG_PRINTLN("Card Mount Success");
         sSDCardMounted = true;
@@ -567,7 +579,7 @@ void setup()
     printf("TESTING TESTING\n");
     SetupEvent::ready();
 
-    leftEye.syncWith(&rightEye);
+    Eyes.reset();
 
     sWarblerAudio.setVolume(sSoundVolume); // 0...21
 
