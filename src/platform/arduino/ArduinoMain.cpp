@@ -773,6 +773,15 @@ void loop()
             // case 'r':
             //     sWarblerAudio.play("/speech/Leia.wav");
             //  break;
+            case 'a':
+                Eyes.setAngryColor();
+                break;
+            case 'o':
+                Eyes.turnOffEyes();
+                break;
+            case 'b':
+                Eyes.turnOnEyes();
+                break;
             case 'q':
                 sWarblerAudio.play("/music/ducktales.wav");
                 break;
