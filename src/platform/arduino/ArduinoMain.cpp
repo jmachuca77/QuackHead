@@ -23,6 +23,7 @@
 #define SMQ_HOSTNAME                    "Warbler"
 #define SMQ_SECRET                      "Astromech"
 
+#define SPI_FREQUENCY  40000000        // 40MHz
 ///////////////////////////////////
 
 #include "pin-map.h"
@@ -253,7 +254,7 @@ bool getSDCardMounted()
 bool mountSDFileSystem()
 {
     SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
-    if (SD.begin(SD_CS_PIN, SPI, 40000000, "/sd", MAX_OPEN_FILES/*, false*/))
+    if (SD.begin(SD_CS_PIN, SPI, SPI_FREQUENCY, "/sd", MAX_OPEN_FILES/*, false*/))
     {
         DEBUG_PRINTLN("Card Mount Success");
         sSDCardMounted = true;
@@ -579,7 +580,9 @@ void setup()
     printf("TESTING TESTING\n");
     SetupEvent::ready();
 
+    #ifndef LCD_EYES
     Eyes.reset();
+    #endif
 
     sWarblerAudio.setVolume(sSoundVolume); // 0...21
 

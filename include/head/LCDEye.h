@@ -16,6 +16,11 @@ public:
         for (int i = 0; i < numEyes; i++) {
             chipSelectPins[i] = csPins[i];
         }
+        for (int i = 0; i < numEyes; i++) { // Set all chip select pins to output and high
+            pinMode(chipSelectPins[i], OUTPUT);
+            digitalWrite(chipSelectPins[i], HIGH); 
+        }
+        reset();
     }
 
     void syncWith(LCDEye* otherEye) {
@@ -80,13 +85,16 @@ public:
     }
 
     virtual void setup() override {
+        for (int i = 0; i < numEyes; i++) {
+            digitalWrite(chipSelectPins[i], LOW);
+        }
+
         tft.begin();
         tft.setRotation(0);
+        clearScreen(fOffColor);
+
         for (int i = 0; i < numEyes; i++) {
-            pinMode(chipSelectPins[i], OUTPUT);
-            digitalWrite(chipSelectPins[i], LOW);
-            clearScreen(fOffColor);
-            digitalWrite(chipSelectPins[i], HIGH);  // Ensure all are disabled initially
+            digitalWrite(chipSelectPins[i], HIGH); 
         }
         printf("LCD SETUP\n");
     }
