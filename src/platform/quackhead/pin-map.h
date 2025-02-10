@@ -5,10 +5,10 @@
 // different PCB
 ///////////////////////////////////
 
-#define RIGHT_EAR_ENC_A 36
-#define RIGHT_EAR_ENC_B 39
-#define LEFT_EAR_ENC_A  34
-#define LEFT_EAR_ENC_B  35
+// #define RIGHT_EAR_ENC_A 36
+// #define RIGHT_EAR_ENC_B 39
+// #define LEFT_EAR_ENC_A  34
+// #define LEFT_EAR_ENC_B  35
 #define LEFT_EYE_PIN    32
 #define RIGHT_EYE_PIN   33
 
@@ -23,7 +23,8 @@
 
 #define RXDX2_PIN       14
 #define TXDX2_PIN       13
-#define LCD_DC_PIN      15
+//#define LCD_DC_PIN      15
+#define FLASHLIGHT_RGB  15
 
 #define RS_RTS_PIN      12
 #define TXD1_PIN        2
@@ -34,6 +35,8 @@
 
 #define RS_SERIAL       Serial1
 #define EXT_SERIAL    	Serial2
+
+#define QUACKHEAD_BAUD  4000000
 
 #define RS_SERIAL_INIT(baud)    RS_SERIAL.begin(baud, SERIAL_8N1, RXD1_PIN, TXD1_PIN)
 #define EXT_SERIAL_INIT(baud)	EXT_SERIAL.begin(baud, SERIAL_8N1, RXDX2_PIN, TXDX2_PIN)

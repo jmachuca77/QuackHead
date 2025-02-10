@@ -10,7 +10,7 @@
 
 class InfinityEye: protected Adafruit_NeoPixel, public AnimatedEvent, public SetupEvent {
 public:
-    InfinityEye(int pin, int numPixels = 16) :
+    InfinityEye(int pin, int numPixels = 17) :
         Adafruit_NeoPixel(numPixels, pin, NEO_GRB + NEO_KHZ800)
     {
         reset();
@@ -52,11 +52,17 @@ public:
         fOffColor = Color(r, g, b);
     }
 
-    void setBlinkTime(uint32_t minDelay, uint32_t maxDelay, uint32_t minCloseTime = 100, uint32_t maxCloseTime = 200, uint32_t interval = 20) {
+    void setBlinkTime(
+        uint32_t minDelay,
+        uint32_t maxDelay,
+        uint32_t minCloseTime = 100,
+        uint32_t maxCloseTime = 200,
+        uint32_t interval = 20)
+    {
         fMinBlinkDelay = minDelay;
         fMaxBlinkDelay = maxDelay;
         fMinCloseTime = minCloseTime;
-        fMaxCloseTime = minCloseTime;
+        fMaxCloseTime = maxCloseTime;
         fInterval = interval;
         fState = 1;
         fNextTime = 0;
@@ -82,10 +88,11 @@ public:
         for (int i = 0; i < numPixels(); i++) {
             setPixelColor(i, fOnColor);
         }
+        show();
     }
 
     virtual void animate() override {
-        // TODO rewrite
+        // Basic blink-state machine with flexible # of states
         auto now = millis();
         if (fPassive || fNextTime > now)
             return;
@@ -115,7 +122,6 @@ public:
             fSyncEye->showState(fState, fOffColor, fOnColor);
         fNextTime = now + delayTime;
         fState = nextState;
-        show();
     }
 
 protected:

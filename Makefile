@@ -3,6 +3,9 @@ BUILD_DIR := .build
 ifdef UPLOAD
   UPLOAD_FLAGS := -t upload
 endif
+ifdef PORT
+  UPLOAD_FLAGS := $(UPLOAD_FLAGS) --upload-port $(PORT)
+endif
 ifdef VERBOSE
   NINJA_FLAGS := -v
 endif

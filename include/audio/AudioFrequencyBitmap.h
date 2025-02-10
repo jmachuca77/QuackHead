@@ -59,8 +59,9 @@ public:
         }
 
         fWriteIndex += sampleCount;
-        if (fWriteIndex >= kInputBufferSize)
+        if (fWriteIndex >= kInputBufferSize) {
             fWriteIndex = 0;
+        }
     }
 
     bool ready()
@@ -199,7 +200,72 @@ private:
 
 ////////////////////////////////////////////////////////////////////
 
-class AudioFrequencyBitmap
+class AudioFrequency {
+public:
+    virtual void processSamples(unsigned numBits, unsigned numChannels, const int16_t* samples, int sampleCount) = 0;
+    virtual unsigned getWidth() = 0;
+    virtual unsigned getHeight() = 0;
+    // virtual uint8_t get(float x, float y) = 0;
+    virtual uint8_t get(unsigned x, unsigned y) = 0;
+    virtual bool isUpdated() = 0;
+};
+
+class AudioFrequencyPrecomputed : public AudioFrequency
+{
+public:
+    AudioFrequencyPrecomputed(const uint8_t* freqTable, size_t freqTableSize) :
+        fFreqTable(freqTable),
+        fFreqTableSize(freqTableSize)
+    {}
+
+    virtual void processSamples(unsigned numBits, unsigned numChannels, const int16_t* samples, int sampleCount) {
+        fFreq = 0;
+        fUpdated = false;
+        if (sampleCount == 512) {
+            if (fY < fFreqTableSize) {
+                fFreq = fFreqTable[fY++];
+                fUpdated = true;
+            }
+        }
+    }
+
+    virtual unsigned getWidth() {
+        return 1;
+    }
+
+    virtual unsigned getHeight() {
+        return fFreqTableSize;
+    }
+
+    virtual uint8_t get(unsigned x, unsigned y) {
+        return fFreq;
+    }
+
+    virtual bool isUpdated() {
+        bool updated = fUpdated;
+        fUpdated = false;
+        return updated;
+    }
+
+    void rewind() {
+        fY = 0;
+        fFreq = 0;
+        fUpdated = false;
+    }
+
+    bool hasEnded() {
+        return (fY >= fFreqTableSize);
+    }
+
+protected:
+    const uint8_t* fFreqTable;
+    size_t fFreqTableSize;
+    bool fUpdated = false;
+    uint8_t fFreq = 0;
+    unsigned fY = 0;
+};
+
+class AudioFrequencyBitmap : public AudioFrequency
 {
 public:
     AudioFrequencyBitmap()
@@ -208,7 +274,7 @@ public:
             memset(pixels, '\0', width * height);
     }
 
-    void processSamples(unsigned numBits, unsigned numChannels, const int16_t* samples, int sampleCount)
+    virtual void processSamples(unsigned numBits, unsigned numChannels, const int16_t* samples, int sampleCount)
     {
         // static bool printed;
         // if (!printed)
@@ -220,6 +286,15 @@ public:
         // }
         // // Ignore frames that are not 640 samples
         if (sampleCount == 1024)
+        {
+            while (sampleCount > 0)
+            {
+                analyser.writeInput(samples, 256);
+                samples += 256;
+                sampleCount -= 256;
+            }
+        }
+        else if (sampleCount == 512)
         {
             while (sampleCount > 0)
             {
@@ -264,7 +339,7 @@ public:
         }
         else
         {
-            Serial.println(sampleCount);
+            Serial.print("SAMPLECOUNT "); Serial.println(sampleCount);
         }
         if (analyser.ready())
         {
@@ -277,17 +352,17 @@ public:
     }
 
     uint8_t* getPixels() { return pixels; }
-    unsigned getWidth() { return width; }
-    unsigned getHeight() { return height; }
-    uint8_t get(float x, float y)
-    {
-        return (x >= 0.0f && x <= 1.0f && y >= 0.0f && y <= 1.0f) ? pixels[unsigned((3*y) * width + (x*width))] : 0;
-    }
-    uint8_t get(unsigned x, unsigned y)
+    virtual unsigned getWidth() { return width; }
+    virtual unsigned getHeight() { return height; }
+    // virtual uint8_t getFloat(float x, float y)
+    // {
+    //     return (x >= 0.0f && x <= 1.0f && y >= 0.0f && y <= 1.0f) ? pixels[unsigned((3*y) * width + (x*width))] : 0;
+    // }
+    virtual uint8_t get(unsigned x, unsigned y)
     {
         return (x < width && y < height) ? pixels[y * width + x] : 0;
     }
-    bool isUpdated()
+    virtual bool isUpdated()
     {
         if (updated)
         {
