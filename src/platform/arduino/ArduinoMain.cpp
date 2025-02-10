@@ -577,7 +577,7 @@ void setup()
     // {
     //     DEBUG_PRINTLN("Failed to init prefs");
     // }
-    printf("TESTING TESTING\n");
+    
     SetupEvent::ready();
 
     #ifndef LCD_EYES
@@ -597,8 +597,9 @@ void setup()
 
     if (getSDCardMounted())
     {
-        // sWarblerAudio.queue(0, 2);
-        //sWarblerAudio.play("/speech/Leia.wav");
+        //sWarblerAudio.queue(0, 2);
+        DEBUG_PRINTLN("Playing startup sound");
+        sWarblerAudio.play("/speech/Leia.wav");
         // sWarblerAudio.play("/music/vader-1.mp3");
         // sWarblerAudio.play(SD, "/HarlemShake.mp3");
     }
@@ -616,7 +617,7 @@ void setup()
 
     moveBothEarsToPosition(0.5, false);
     nextEarMovetime = millis() + 10000;
-    playSound(100);
+    // playSound(100);
 }
 
 double currentEarPos = 0.5;
@@ -626,7 +627,11 @@ void playSound(int num) {
     char buffer[50];
     snprintf(buffer, sizeof(buffer), "/bd/%d.wav", num);
     printf("PLAY: %s\n", buffer);
-    sWarblerAudio.play(buffer);
+    if (sWarblerAudio.isPlaying()) {
+        DEBUG_PRINTLN("Already playing");
+    } else {
+        sWarblerAudio.play(buffer);
+    }
     nextSoundtime = millis() + random(1000, 20000);
 }
 
@@ -709,8 +714,8 @@ void loop()
     // }
 
     auto now = millis();
-    if (nextEarMovetime < now) {
-        randomEarPosition();
+    // if (nextEarMovetime < now) {
+    //     randomEarPosition();
 
         // digitalWrite(RS_RTS_PIN, HIGH);
         // RS_SERIAL.println("EAR TIME");
