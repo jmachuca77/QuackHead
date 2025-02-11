@@ -16,6 +16,7 @@
 // CONFIGURABLE OPTIONS
 ///////////////////////////////////
 
+#define LCD_EYES 1 
 #define MAX_OPEN_FILES 2
 
 #define USE_DEBUG                       // Define to enable debug diagnostic
@@ -714,8 +715,8 @@ void loop()
     // }
 
     auto now = millis();
-    // if (nextEarMovetime < now) {
-    //     randomEarPosition();
+    if (nextEarMovetime < now) {
+        randomEarPosition();
 
         // digitalWrite(RS_RTS_PIN, HIGH);
         // RS_SERIAL.println("EAR TIME");
@@ -778,9 +779,6 @@ void loop()
             // case 'r':
             //     sWarblerAudio.play("/speech/Leia.wav");
             //  break;
-            case 'a':
-                Eyes.setAngryColor();
-                break;
             case 'o':
                 Eyes.turnOffEyes();
                 break;
@@ -815,12 +813,17 @@ void loop()
                 }
                 break;
             case 'a':
+#ifdef LCD_EYES
+                Eyes.setAngryColor();
+#else
                 leftEye.setOnColor(127, 0, 0);
                 rightEye.setOnColor(127, 0, 0);
+
                 break;
             case 'h':
                 leftEye.setOnColor(127, 127, 127);
                 rightEye.setOnColor(127, 127, 127);
+#endif
                 break;
             case 'z':
             #ifdef LEFT_EAR_ENC_A
