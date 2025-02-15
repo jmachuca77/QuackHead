@@ -22,9 +22,10 @@
 #define I2S_BCLK_PIN 	27  // I2S-BCK audio output
 
 #define RXDX2_PIN       14
-#define TXDX2_PIN       13
-//#define LCD_DC_PIN      15
-#define FLASHLIGHT_RGB  15
+//#define TXDX2_PIN       13
+
+#define LCD_DC_PIN      15
+#define FLASHLIGHT_RGB  13
 
 #define RS_RTS_PIN      12
 #define TXD1_PIN        2

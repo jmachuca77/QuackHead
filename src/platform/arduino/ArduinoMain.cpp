@@ -541,6 +541,7 @@ bool findEarLimits() {
 
 static uint32_t nextEarMovetime;
 static int sSoundVolume = 10; //0-21
+static int sFlashlightPower = 25; //0-100
 
 void playSound(int num);
 
@@ -558,8 +559,9 @@ void setup()
     pinMode(RS_RTS_PIN, OUTPUT);
     digitalWrite(RS_RTS_PIN, LOW);
     RS_SERIAL_INIT(QUACKHEAD_BAUD);
+#ifndef FLASHLIGHT_RGB
     EXT_SERIAL_INIT(115200);
-
+#endif
     // if (!preferences.begin("rseries", false))
     // {
     //     DEBUG_PRINTLN("Failed to init prefs");
@@ -767,6 +769,31 @@ void loop()
             case 'e':
                 playSound(100);
                 break;
+#ifdef FLASHLIGHT_RGB
+            case 'g':
+                if (sFlashlightPower < 100)
+                {
+                    sFlashlightPower += 5;
+                    printf("POWER: %d\n", sFlashlightPower);
+                    flashLight.setPower(sFlashlightPower);
+                }            
+                break;
+            case 'f':
+                if (flashLight.getState())
+                    flashLight.setState(false);
+                else
+                    flashLight.setState(true,6000);
+                    playSound(100);
+                break;
+            case 'd':
+                if (sFlashlightPower > 10)
+                {
+                    sFlashlightPower -= 5;
+                    printf("POWER: %d\n", sFlashlightPower);
+                    flashLight.setPower(sFlashlightPower);
+                }
+                break;
+#endif
             case 'r':
                 reboot();
                 break;
