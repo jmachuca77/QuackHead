@@ -37,7 +37,7 @@
 #define RS_SERIAL       Serial1
 #define EXT_SERIAL    	Serial2
 
-#define QUACKHEAD_BAUD  4000000
+#define QUACKHEAD_BAUD  3000000
 
 #define RS_SERIAL_INIT(baud)    RS_SERIAL.begin(baud, SERIAL_8N1, RXD1_PIN, TXD1_PIN)
 #define EXT_SERIAL_INIT(baud)	EXT_SERIAL.begin(baud, SERIAL_8N1, RXDX2_PIN, TXDX2_PIN)

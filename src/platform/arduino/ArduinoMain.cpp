@@ -16,6 +16,7 @@
 // CONFIGURABLE OPTIONS
 ///////////////////////////////////
 
+#define LCD_EYES 1 
 #define MAX_OPEN_FILES 2
 
 #define USE_DEBUG                       // Define to enable debug diagnostic
@@ -23,6 +24,7 @@
 #define SMQ_HOSTNAME                    "Warbler"
 #define SMQ_SECRET                      "Astromech"
 
+#define SPI_FREQUENCY  30000000        // 40MHz
 ///////////////////////////////////
 
 #include "pin-map.h"
@@ -44,7 +46,11 @@
 #else
 #include "head/FlashLightPWM.h"
 #endif
+#ifdef LCD_EYES
+#include "head/LCDEye.h"
+#else
 #include "head/InfinityEye.h"
+#endif
 #include "head/IMU.h"
 
 ////////////////////////////////
@@ -85,7 +91,7 @@ public:
     }
 
     void controlEyes(uint8_t eyes);
-    void controlFlashlight(uint8_t durationSec);
+    void controlFlashlight(uint8_t durationSec, uint8_t playSound = true);
     void controlSound(uint8_t sound);
 
     int16_t readAnalog() {
@@ -125,7 +131,7 @@ private:
     {
         (void)dxl_err_code;
         DXLQuackHead* quack = ((DXLQuackHead*)arg);
-        DEBUG_PRINT("WRITE: "); DEBUG_PRINTLN(item_addr);
+        DEBUG_PRINT("WRITE: "); DEBUG_PRINTLN(item_addr); DEBUG_PRINT("arg: "); DEBUG_PRINTLN(reinterpret_cast<uintptr_t>(arg));
         switch (item_addr) {
             case ADDR_CONTROL_EYES:
                 quack->controlEyes(quack->fControl_Eyes);
@@ -216,8 +222,13 @@ ServoDispatchPCA9685<SizeOfArray(servoSettings)> servoDispatch(servoSettings);
 
 ////////////////////////////////
 
+#ifdef LCD_EYES
+int csPins[2] = { LEFT_EYE_PIN , RIGHT_EYE_PIN };
+LCDEye Eyes(2,csPins);
+#else
 InfinityEye leftEye(LEFT_EYE_PIN);
 InfinityEye rightEye(RIGHT_EYE_PIN);
+#endif
 #ifdef FLASHLIGHT_RGB
 FlashLightRGB flashLight(FLASHLIGHT_RGB);
 #else
@@ -241,7 +252,7 @@ bool getSDCardMounted()
 bool mountSDFileSystem()
 {
     SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
-    if (SD.begin(SD_CS_PIN, SPI, 4000000, "/sd", MAX_OPEN_FILES/*, false*/))
+    if (SD.begin(SD_CS_PIN, SPI, SPI_FREQUENCY, "/sd", MAX_OPEN_FILES/*, false*/))
     {
         DEBUG_PRINTLN("Card Mount Success");
         sSDCardMounted = true;
@@ -540,6 +551,7 @@ bool findEarLimits() {
 }
 
 static uint32_t nextEarMovetime;
+static uint32_t flashLightOnTime;
 static int sSoundVolume = 10; //0-21
 static int sFlashlightPower = 25; //0-100
 
@@ -569,7 +581,9 @@ void setup()
     printf("TESTING TESTING\n");
     SetupEvent::ready();
 
+    #ifndef LCD_EYES
     leftEye.syncWith(&rightEye);
+    #endif
 
     sWarblerAudio.setVolume(sSoundVolume); // 0...21
 
@@ -585,7 +599,9 @@ void setup()
     if (getSDCardMounted())
     {
         // sWarblerAudio.queue(0, 2);
-        //sWarblerAudio.play("/speech/Leia.wav");
+        DEBUG_PRINTLN("Flashing flashlight as status");
+        flashLight.setState(true, 1000);
+        // sWarblerAudio.play("/speech/Leia.wav");
         // sWarblerAudio.play("/music/vader-1.mp3");
         // sWarblerAudio.play(SD, "/HarlemShake.mp3");
     }
@@ -603,7 +619,7 @@ void setup()
 
     moveBothEarsToPosition(0.5, false);
     nextEarMovetime = millis() + 10000;
-    playSound(100);
+    // playSound(100);
 }
 
 double currentEarPos = 0.5;
@@ -613,8 +629,23 @@ void playSound(int num) {
     char buffer[50];
     snprintf(buffer, sizeof(buffer), "/bd/%d.wav", num);
     printf("PLAY: %s\n", buffer);
-    sWarblerAudio.play(buffer);
+    if (sWarblerAudio.isPlaying()) {
+        DEBUG_PRINTLN("Already playing");
+    } else {
+        sWarblerAudio.play(buffer);
+    }
     nextSoundtime = millis() + random(1000, 20000);
+}
+
+void playBDXSound(const char* file) {
+    char buffer[50];
+    snprintf(buffer, sizeof(buffer), "/bdx/%s.wav", file);
+    printf("PLAY: %s\n", buffer);
+    if (sWarblerAudio.isPlaying()) {
+        DEBUG_PRINTLN("Already playing");
+    } else {
+        sWarblerAudio.play(buffer);
+    }
 }
 
 void randomSound() {
@@ -667,16 +698,20 @@ void DXLQuackHead::controlEyes(uint8_t eyes) {
     DEBUG_PRINT("DXL EYES: "); DEBUG_PRINTLN(eyes);
 }
 
-void DXLQuackHead::controlFlashlight(uint8_t durationSec) {
-    DEBUG_PRINT("DXL FLASHLIGHT: "); DEBUG_PRINTLN(durationSec);
-    flashLight.setState(true, random(1000, 4000));
+void DXLQuackHead::controlFlashlight(uint8_t durationSec, uint8_t playSound) {
+    DEBUG_PRINT("DXL FLASHLIGHT: "); DEBUG_PRINT(durationSec); DEBUG_PRINT(" Sound: "); DEBUG_PRINTLN(playSound);
+    if (playSound) {
+        playBDXSound("flashlight");
+    }
+    flashLightOnTime = millis() + 750; 
+    // flashLight.setState(true, random(1000, 4000));
 }
 
 void DXLQuackHead::controlSound(uint8_t sound) {
     DEBUG_PRINT("DXL SND: "); DEBUG_PRINTLN(sound);
-    if (sWarblerAudio.isComplete()) {
-        sWarblerAudio.queue(0, 0, sound);
-    }
+    char soundFile[10];
+    snprintf(soundFile, sizeof(soundFile), "%d", sound);
+    playBDXSound(soundFile);
 }
 
 ////////////////////////////////
@@ -696,6 +731,12 @@ void loop()
     // }
 
     auto now = millis();
+    
+    if ((flashLightOnTime != 0) && ( flashLightOnTime <= now)) {
+        flashLight.setState(true, 5700);
+        flashLightOnTime = 0;
+    } 
+
     if (nextEarMovetime < now) {
         randomEarPosition();
 
@@ -760,11 +801,24 @@ void loop()
             // case 'r':
             //     sWarblerAudio.play("/speech/Leia.wav");
             //  break;
+#ifdef LCD_EYES
+            case 'o':
+                Eyes.turnOffEyes();
+                break;
+            case 'b':
+                Eyes.turnOnEyes();
+                break;
+#endif
             case 'q':
                 sWarblerAudio.play("/music/ducktales.wav");
                 break;
             case 'w':
-                randomSound();
+                static int soundIndex = 1;
+                char soundFile[10];
+                snprintf(soundFile, sizeof(soundFile), "%d", soundIndex);
+                playBDXSound(soundFile);
+                soundIndex = (soundIndex % 7) + 1;
+                // playBDXSound("1");
                 break;
             case 'e':
                 playSound(100);
@@ -779,11 +833,17 @@ void loop()
                 }            
                 break;
             case 'f':
-                if (flashLight.getState())
+                if (flashLight.getState() || flashLightOnTime > millis()) {
+                    flashLightOnTime = 0;
                     flashLight.setState(false);
-                else
-                    flashLight.setState(true,6000);
-                    playSound(100);
+                    sWarblerAudio.stop();
+                } else { 
+                    //Start playing bdx flashlight audito, then
+                    //delay 2000ms before then call flashlight on
+                    playBDXSound("flashlight");
+                    flashLightOnTime = millis() + 750; 
+                    // flashLight.setState(true, 2000);                    
+                }
                 break;
             case 'd':
                 if (sFlashlightPower > 10)
@@ -813,12 +873,16 @@ void loop()
                 }
                 break;
             case 'a':
+#ifdef LCD_EYES
+                Eyes.setAngryColor();
+#else
                 leftEye.setOnColor(127, 0, 0);
                 rightEye.setOnColor(127, 0, 0);
                 break;
             case 'h':
                 leftEye.setOnColor(127, 127, 127);
                 rightEye.setOnColor(127, 127, 127);
+#endif
                 break;
             case 'z':
             #ifdef LEFT_EAR_ENC_A
