@@ -2,6 +2,9 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 ///////////////////////////////////
 
 #if __has_include("build_version.h")
@@ -559,6 +562,17 @@ void playSound(int num);
 
 DXLQuackHead fQuack(RS_SERIAL, QUACKHEAD_BAUD, 6, RS_RTS_PIN);
 
+//-----------------------------------------
+// New task to process Dynamixel serial communication
+//-----------------------------------------
+void dynamixelTask(void* pvParameters) {
+    while (true) {
+        fQuack.process();
+        vTaskDelay(pdMS_TO_TICKS(1));  // Delay 1ms
+    }
+}
+////////////////////////////////
+
 void setup()
 {   
     REELTWO_READY();
@@ -616,6 +630,9 @@ void setup()
     DEBUG_PRINTLN();
 
     DEBUG_PRINTLN("READY");
+
+    // Start the Dynamixel processing task on a separate thread
+    xTaskCreate(dynamixelTask, "DXLTask", 2048, NULL, 1, NULL);
 
     moveBothEarsToPosition(0.5, false);
     nextEarMovetime = millis() + 10000;
@@ -726,8 +743,9 @@ void loop()
         //     imu.x(), imu.y(), imu.z(), imu.accuracy());
     }
 
+    // The Dynamixel serial communication is now handled on a separate thread
     // if (quack != nullptr) {
-        fQuack.process();
+    //     fQuack.process();
     // }
 
     auto now = millis();
