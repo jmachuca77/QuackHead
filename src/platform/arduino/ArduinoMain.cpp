@@ -720,7 +720,7 @@ void DXLQuackHead::controlFlashlight(uint8_t durationSec, uint8_t playSound) {
     if (playSound) {
         playBDXSound("flashlight");
     }
-    flashLightOnTime = millis() + 750; 
+    flashLightOnTime = millis() + 300; 
     // flashLight.setState(true, random(1000, 4000));
 }
 
@@ -768,7 +768,7 @@ void loop()
 
     if (Serial.available())
     {
-        char ch = Serial.read();
+         char ch = Serial.read();
         DEBUG_PRINT("RECEIVED: "); DEBUG_PRINTLN(ch);
         switch (ch)
         {
@@ -859,7 +859,7 @@ void loop()
                     //Start playing bdx flashlight audito, then
                     //delay 2000ms before then call flashlight on
                     playBDXSound("flashlight");
-                    flashLightOnTime = millis() + 750; 
+                    flashLightOnTime = millis() + 300; 
                     // flashLight.setState(true, 2000);                    
                 }
                 break;
