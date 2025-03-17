@@ -39,5 +39,12 @@
 
 #define QUACKHEAD_BAUD  4000000
 
-#define RS_SERIAL_INIT(baud)    RS_SERIAL.begin(baud, SERIAL_8N1, RXD1_PIN, TXD1_PIN)
+#define RS_SERIAL_RX_BUFFER_SIZE  1024
+
+#define RS_SERIAL_INIT(baud)    { \
+    RS_SERIAL.begin(baud, SERIAL_8N1, RXD1_PIN, TXD1_PIN); \
+    RS_SERIAL.setRxBufferSize(RS_SERIAL_RX_BUFFER_SIZE); \
+}
+
+// #define RS_SERIAL_INIT(baud)    RS_SERIAL.begin(baud, SERIAL_8N1, RXD1_PIN, TXD1_PIN)
 #define EXT_SERIAL_INIT(baud)	EXT_SERIAL.begin(baud, SERIAL_8N1, RXDX2_PIN, TXDX2_PIN)

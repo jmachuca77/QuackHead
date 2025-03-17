@@ -103,6 +103,7 @@ public:
     }
 
     void process() {
+        uint32_t numberofloops = 0;
         while (fPort.available()) {
             if (fDXL.processPacket() == false){
                 DEBUG_PRINT("Last lib err code: ");
@@ -111,6 +112,9 @@ public:
                 DEBUG_PRINT("Last status packet err code: ");
                 DEBUG_PRINT(fDXL.getLastStatusPacketError());
                 DEBUG_PRINTLN();
+            }
+            if(++numberofloops > 10){
+                break;
             }
         }
     }
@@ -632,7 +636,7 @@ void setup()
     DEBUG_PRINTLN("READY");
 
     // Start the Dynamixel processing task on a separate thread
-    xTaskCreate(dynamixelTask, "DXLTask", 2048, NULL, 1, NULL);
+   // xTaskCreate(dynamixelTask, "DXLTask", 2048, NULL, 1, NULL);
 
     moveBothEarsToPosition(0.5, false);
     nextEarMovetime = millis() + 10000;
@@ -655,14 +659,12 @@ void playSound(int num) {
 }
 
 void playBDXSound(const char* file) {
-    char buffer[50];
-    snprintf(buffer, sizeof(buffer), "/bdx/%s.wav", file);
-    printf("PLAY: %s\n", buffer);
-    if (sWarblerAudio.isPlaying()) {
-        DEBUG_PRINTLN("Already playing");
-    } else {
-        sWarblerAudio.play(buffer);
-    }
+    // convert the char* variable file to an int
+    // and then play the sound
+    DEBUG_PRINT("PLAY: "); DEBUG_PRINTLN(file);
+    uint8_t num = atoi(file);
+    if (sWarblerAudio.isComplete())
+    sWarblerAudio.queue(0, 0, num);
 }
 
 void randomSound() {
@@ -718,7 +720,7 @@ void DXLQuackHead::controlEyes(uint8_t eyes) {
 void DXLQuackHead::controlFlashlight(uint8_t durationSec, uint8_t playSound) {
     DEBUG_PRINT("DXL FLASHLIGHT: "); DEBUG_PRINT(durationSec); DEBUG_PRINT(" Sound: "); DEBUG_PRINTLN(playSound);
     if (playSound) {
-        playBDXSound("flashlight");
+        playBDXSound("5");
     }
     flashLightOnTime = millis() + 300; 
     // flashLight.setState(true, random(1000, 4000));
@@ -745,7 +747,7 @@ void loop()
 
     // The Dynamixel serial communication is now handled on a separate thread
     // if (quack != nullptr) {
-    //     fQuack.process();
+        fQuack.process();
     // }
 
     auto now = millis();
@@ -858,7 +860,9 @@ void loop()
                 } else { 
                     //Start playing bdx flashlight audito, then
                     //delay 2000ms before then call flashlight on
-                    playBDXSound("flashlight");
+                    if (sWarblerAudio.isComplete())
+                        sWarblerAudio.queue(0, 0, 5);
+                    // playBDXSound("flashlight");
                     flashLightOnTime = millis() + 300; 
                     // flashLight.setState(true, 2000);                    
                 }
@@ -916,7 +920,7 @@ void loop()
                 {
                     static int warble;
                     sWarblerAudio.queue(0, 0, warble++);
-                    if (warble > 22)
+                    if (warble > 5)
                         warble = 0;
                 }
                 break;
