@@ -1,0 +1,343 @@
+/*
+ * Realtime audio frequency analyzer.
+ * Mimir Reynisson
+ *
+ * AudioFrequencyBitmap is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * AudioFrequencyBitmap is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with AudioFrequencyBitmap; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
+#include <complex>
+#include <algorithm>
+
+#define CTFFT_MAXBITS 8
+#include "CTFFT.h"
+
+#ifndef MEM_BARRIER
+#define MEM_BARRIER()
+#endif
+
+////////////////////////////////////////////////////////////////////
+
+class RealtimeAnalyser
+{
+public:
+    static constexpr size_t kFFTSize = 256;
+    static constexpr unsigned kInputBufferSize = kFFTSize * 2;
+    static constexpr double kDefaultSmoothingTimeConstant = 0.8;
+    static constexpr double kDefaultMinDecibels = -100;
+    static constexpr double kDefaultMaxDecibels = -30;
+
+    RealtimeAnalyser() :
+        fWriteIndex(0),
+        fPendingSamples(0),
+        fSmoothingTimeConstant(kDefaultSmoothingTimeConstant),
+        fMinDecibels(kDefaultMinDecibels),
+        fMaxDecibels(kDefaultMaxDecibels)
+    {
+        memset(fSampleBuffer, '\0', sizeof(fSampleBuffer));
+        memset(fMagnitudeBuffer, '\0', sizeof(fMagnitudeBuffer));
+    }
+
+    void writeInput(const int16_t* samples, size_t sampleCount, unsigned stride = 1)
+    {
+        if (samples == nullptr || sampleCount == 0)
+            return;
+        if (stride == 0)
+            stride = 1;
+
+        while (sampleCount > 0)
+        {
+            const size_t space = kInputBufferSize - fWriteIndex;
+            const size_t chunk = std::min(sampleCount, space);
+            float* dst = &fSampleBuffer[fWriteIndex];
+            for (size_t i = 0; i < chunk; ++i)
+            {
+                dst[i] = ((float)samples[i * stride]) / 32768.0f;
+            }
+
+            fWriteIndex += chunk;
+            if (fWriteIndex >= kInputBufferSize)
+                fWriteIndex = 0;
+            if (fPendingSamples < kFFTSize)
+            {
+                const size_t pending = fPendingSamples + chunk;
+                fPendingSamples = (pending >= kFFTSize) ? kFFTSize : (unsigned)pending;
+            }
+
+            samples += chunk * stride;
+            sampleCount -= chunk;
+        }
+    }
+
+    bool ready()
+    {
+        return fPendingSamples >= kFFTSize;
+    }
+
+    unsigned getFrequencyBinCount() const
+    {
+        return kFFTSize / 2;
+    }
+
+    void getByteFrequencyData(uint8_t* destArray, size_t destArraySize)
+    {
+        if (!destArray)
+            return;
+
+        doFFTAnalysis();
+
+        // Convert from linear magnitude to unsigned-byte decibels.
+        size_t len = std::min(magnitudeBufferLength(), destArraySize);
+        if (len > 0)
+        {
+            fPendingSamples = 0;
+            const double minDecibels = fMinDecibels;
+            const double rangeScaleFactor = (fMaxDecibels != minDecibels) ? 1 / (fMaxDecibels - minDecibels) : 1;
+
+            const float* source = fMagnitudeBuffer;
+            for (unsigned i = 0; i < len; i++)
+            {
+                float linearValue = source[i];
+                double dbMag = (linearValue != 0) ? linearToDecibels(linearValue) : minDecibels;
+
+                // The range m_minDecibels to m_maxDecibels will be scaled to byte values from 0 to UCHAR_MAX.
+                double scaledValue = UCHAR_MAX * (dbMag - minDecibels) * rangeScaleFactor;
+
+                // Clip to valid range.
+                if (scaledValue < 0)
+                    scaledValue = 0;
+                if (scaledValue > UCHAR_MAX)
+                    scaledValue = UCHAR_MAX;
+
+                destArray[i] = (uint8_t)scaledValue;
+            }
+        }
+    }
+
+private:
+    float fSampleBuffer[kInputBufferSize];
+    float fMagnitudeBuffer[kFFTSize];
+    unsigned fWriteIndex;
+    unsigned fPendingSamples;
+    double fSmoothingTimeConstant;
+    double fMinDecibels;
+    double fMaxDecibels;
+    CTFFT::RealDiscrete<float, kFFTSize> fAnalysisFrame;
+
+    size_t sampleBufferLength() const
+    {
+        return sizeof(fSampleBuffer) / sizeof(fSampleBuffer[0]);
+    }
+
+    size_t magnitudeBufferLength() const
+    {
+        return sizeof(fMagnitudeBuffer) / sizeof(fMagnitudeBuffer[0]);
+    }
+
+    // linearSample must be non-zero
+    static float linearToDecibels(float linearSample)
+    {
+        return 20 * log10f(linearSample);
+    }
+
+    void applyWindow(float* p, size_t n)
+    {
+        static constexpr double twoPiDouble = M_PI * 2.0;
+
+        // Blackman window
+        double alpha = 0.16;
+        double a0 = 0.5 * (1 - alpha);
+        double a1 = 0.5;
+        double a2 = 0.5 * alpha;
+
+        for (unsigned i = 0; i < n; ++i)
+        {
+            double x = (double)i / (double)n;
+            double window = a0 - a1 * cos(twoPiDouble * x) + a2 * cos(twoPiDouble * 2.0 * x);
+            p[i] *= double(window);
+        }
+    }
+
+    void doFFTAnalysis()
+    {
+        float tempBuffer[kFFTSize];
+        float* inputBuffer = fSampleBuffer;
+        float* tempP = tempBuffer;
+
+        // Take the previous fftSize values from the input buffer and copy into the temporary buffer.
+        unsigned writeIndex = fWriteIndex;
+        if (writeIndex < kFFTSize)
+        {
+            memcpy(tempP, inputBuffer + writeIndex - kFFTSize + kInputBufferSize, sizeof(*tempP) * (kFFTSize - writeIndex));
+            memcpy(tempP + kFFTSize - writeIndex, inputBuffer, sizeof(*tempP) * writeIndex);
+        }
+        else
+        {
+            memcpy(tempP, inputBuffer + writeIndex - kFFTSize, sizeof(*tempP) * kFFTSize);
+        }
+
+        // Window the input samples.
+        applyWindow(tempP, kFFTSize);
+
+        // Do the analysis.
+        fAnalysisFrame.calculate(tempP);
+
+        // Blow away the packed nyquist component.
+        tempP[1] = 0;
+
+        // Normalize so that an input sine wave at 0dBfs registers as 0dBfs (undo FFT scaling factor).
+        const double magnitudeScale = 1.0 / kFFTSize;
+
+        // A value of 0 does no averaging with the previous result.  Larger values produce slower, but smoother changes.
+        double k = fSmoothingTimeConstant;
+        k = std::max(0.0, k);
+        k = std::min(1.0, k);
+
+        // Convert the analysis data from complex to magnitude and average with the previous result.
+        float* destination = fMagnitudeBuffer;
+        size_t n = magnitudeBufferLength();
+        for (size_t i = 0; i < n; ++i)
+        {
+            std::complex<double> c(tempP[i*2], tempP[i*2+1]);
+            double scalarMagnitude = abs(c) * magnitudeScale;
+            destination[i] = float(k * destination[i] + (1 - k) * scalarMagnitude);
+        }
+    }
+};
+
+////////////////////////////////////////////////////////////////////
+
+class AudioFrequency {
+public:
+    virtual void processSamples(unsigned numBits, unsigned numChannels, const int16_t* samples, int sampleCount) = 0;
+    virtual unsigned getWidth() = 0;
+    virtual unsigned getHeight() = 0;
+    // virtual uint8_t get(float x, float y) = 0;
+    virtual uint8_t get(unsigned x, unsigned y) = 0;
+    virtual bool isUpdated() = 0;
+};
+
+class AudioFrequencyPrecomputed : public AudioFrequency
+{
+public:
+    AudioFrequencyPrecomputed(const uint8_t* freqTable, size_t freqTableSize) :
+        fFreqTable(freqTable),
+        fFreqTableSize(freqTableSize)
+    {}
+
+    virtual void processSamples(unsigned numBits, unsigned numChannels, const int16_t* samples, int sampleCount) {
+        fFreq = 0;
+        fUpdated = false;
+        if (sampleCount == 512) {
+            if (fY < fFreqTableSize) {
+                fFreq = fFreqTable[fY++];
+                fUpdated = true;
+            }
+        }
+    }
+
+    virtual unsigned getWidth() {
+        return 1;
+    }
+
+    virtual unsigned getHeight() {
+        return fFreqTableSize;
+    }
+
+    virtual uint8_t get(unsigned x, unsigned y) {
+        return fFreq;
+    }
+
+    virtual bool isUpdated() {
+        bool updated = fUpdated;
+        fUpdated = false;
+        return updated;
+    }
+
+    void rewind() {
+        fY = 0;
+        fFreq = 0;
+        fUpdated = false;
+    }
+
+    bool hasEnded() {
+        return (fY >= fFreqTableSize);
+    }
+
+protected:
+    const uint8_t* fFreqTable;
+    size_t fFreqTableSize;
+    bool fUpdated = false;
+    uint8_t fFreq = 0;
+    unsigned fY = 0;
+};
+
+class AudioFrequencyBitmap : public AudioFrequency
+{
+public:
+    AudioFrequencyBitmap()
+    {
+        if (pixels != nullptr)
+            memset(pixels, '\0', width * height);
+    }
+
+    virtual void processSamples(unsigned numBits, unsigned numChannels, const int16_t* samples, int sampleCount)
+    {
+        if (numBits != 16 || samples == nullptr || sampleCount <= 0)
+            return;
+        if (numChannels == 0)
+            numChannels = 1;
+
+        analyser.writeInput(samples, (size_t)sampleCount, numChannels);
+
+        if (analyser.ready())
+        {
+            analyser.getByteFrequencyData(freq, width);
+            memmove(&pixels[width], pixels, width * (4*60-1));
+            memcpy(pixels, freq, width);
+            updated = true;
+            MEM_BARRIER();
+        }
+    }
+
+    uint8_t* getPixels() { return pixels; }
+    virtual unsigned getWidth() { return width; }
+    virtual unsigned getHeight() { return height; }
+    // virtual uint8_t getFloat(float x, float y)
+    // {
+    //     return (x >= 0.0f && x <= 1.0f && y >= 0.0f && y <= 1.0f) ? pixels[unsigned((3*y) * width + (x*width))] : 0;
+    // }
+    virtual uint8_t get(unsigned x, unsigned y)
+    {
+        return (x < width && y < height) ? pixels[y * width + x] : 0;
+    }
+    virtual bool isUpdated()
+    {
+        if (updated)
+        {
+            updated = false;
+            MEM_BARRIER();
+            return true;
+        }
+        return false;
+    }
+
+private:
+    RealtimeAnalyser analyser;
+    unsigned width = analyser.getFrequencyBinCount();
+    unsigned height = 4*60;
+    bool updated = false;
+    uint8_t* pixels = (uint8_t*)malloc(width * height);
+    uint8_t* freq = new uint8_t[width];
+};
