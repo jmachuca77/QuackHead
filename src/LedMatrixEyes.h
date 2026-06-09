@@ -18,7 +18,7 @@ static constexpr uint8_t  kMatrixHeight = 12;
 static constexpr uint16_t kNumLeds      = 121;
 static constexpr uint16_t kInvalidLed   = 0xFFFF;
 
-static constexpr uint8_t  kDefaultBrightness         = 20;
+static constexpr uint8_t  kDefaultBrightness         = 50;
 static constexpr uint32_t kDefaultBlinkMinDelayMs    = 1000;
 static constexpr uint32_t kDefaultBlinkMaxDelayMs    = 4000;
 static constexpr uint32_t kDefaultBlinkMinCloseMs    = 180;

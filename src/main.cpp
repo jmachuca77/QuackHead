@@ -60,13 +60,13 @@ constexpr uint32_t kPeripheralDxlBaud = 4000000;
 constexpr size_t kPeripheralDxlMaxPacket = 256;
 
 // Tune these on-bench if the ears move the wrong direction or sit off-center.
-constexpr int32_t kAntennaCenterLeft  = 2048;
-constexpr int32_t kAntennaCenterRight = 2048;
+constexpr int32_t kAntennaCenterLeft  = 1500;
+constexpr int32_t kAntennaCenterRight = 2450;
 constexpr int8_t  kAntennaSignLeft    = +1;
 constexpr int8_t  kAntennaSignRight   = -1;
 constexpr int32_t kAntennaTravelCounts = 520;
-constexpr int32_t kAntennaMinCounts = 1200;
-constexpr int32_t kAntennaMaxCounts = 2895;
+constexpr int32_t kAntennaMinCounts = 1000;
+constexpr int32_t kAntennaMaxCounts = 3000;
 
 constexpr uint32_t kProfileAcceleration = 50;
 constexpr uint32_t kProfileVelocity = 120;
@@ -503,6 +503,70 @@ class TorchDriver {
 
   TwoWire* wire_ = nullptr;
   uint8_t address_ = 0;
+  float level_ = 0.0f;
+  uint32_t deadline_ms_ = 0;
+};
+
+template <uint8_t PIN, uint16_t NUM_PIXELS = 1>
+class NeoPixelTorch {
+ public:
+  void begin() {
+    FastLED.addLeds<WS2812B, PIN, GRB>(leds_, NUM_PIXELS);
+    fill_solid(leds_, NUM_PIXELS, CRGB::Black);
+    FastLED.show();
+    ready_ = true;
+  }
+
+  bool ready() const { return ready_; }
+  float level() const { return level_; }
+  bool isOn() const { return level_ > 0.0f; }
+
+  bool turnOn(float level01 = 1.0f, uint32_t timeout_ms = 6000) {
+    if (!ready_) return false;
+    level01 = clampf(level01, 0.0f, 1.0f);
+    level_ = level01;
+    applyLevel();
+    deadline_ms_ = (timeout_ms == 0) ? 0u : (millis() + timeout_ms);
+    return true;
+  }
+
+  bool setLevel(float level01) {
+    if (!ready_) return false;
+    level01 = clampf(level01, 0.0f, 1.0f);
+    level_ = level01;
+    applyLevel();
+    return true;
+  }
+
+  bool setOff() {
+    deadline_ms_ = 0;
+    level_ = 0.0f;
+    if (!ready_) return false;
+    fill_solid(leds_, NUM_PIXELS, CRGB::Black);
+    FastLED.show();
+    return true;
+  }
+
+  void service(uint32_t now_ms) {
+    if (deadline_ms_ != 0 && now_ms >= deadline_ms_) {
+      setOff();
+    }
+  }
+
+  uint32_t timeoutRemainingMs(uint32_t now_ms) const {
+    if (deadline_ms_ == 0 || now_ms >= deadline_ms_) return 0;
+    return deadline_ms_ - now_ms;
+  }
+
+ private:
+  void applyLevel() {
+    const uint8_t brightness = (uint8_t)lroundf(level_ * 255.0f);
+    fill_solid(leds_, NUM_PIXELS, CRGB(brightness, brightness, brightness));
+    FastLED.show();
+  }
+
+  CRGB leds_[NUM_PIXELS] = {};
+  bool ready_ = false;
   float level_ = 0.0f;
   uint32_t deadline_ms_ = 0;
 };
@@ -1909,6 +1973,7 @@ class LoopingPsramPlayer {
 EyeDriver gEyes;
 DynamixelTtlMasterBus gAntennaBusMaster(Serial7, qh4::kTXEN);
 TorchDriver gTorch;
+NeoPixelTorch<qh4::kTorchLedPin> gNeoTorch;
 AntennaShow gAntenna;
 
 AudioInputUSB gUsbIn;
@@ -1988,6 +2053,7 @@ struct AudioState {
 
 struct ControlShadow {
   uint16_t flashlight_raw = 0;
+  uint16_t flashlight_preset_raw = 250;
   uint32_t flashlight_timeout_ms = kTorchDefaultTimeoutMs;
   uint16_t volume_raw = 850;
   uint32_t playsound_arg0 = 0;
@@ -2415,8 +2481,8 @@ void mirrorWritableShadowToControlTable() {
 
 void updateReadOnlyControlTable(uint32_t now_ms) {
   uint32_t status = 0;
-  if (gTorch.ready()) status |= kStatusTorchReady;
-  if (gTorch.isOn()) status |= kStatusTorchOn;
+  if (gTorch.ready() || gNeoTorch.ready()) status |= kStatusTorchReady;
+  if (gTorch.isOn() || gNeoTorch.isOn()) status |= kStatusTorchOn;
   if (gAudio.sd_ready) status |= kStatusSdReady;
   if (gLampClip.isActive()) status |= kStatusLampPlaying;
   if (gAuxClip.isActive() || gWarblerPodPlayer.isActive()) status |= kStatusAuxPlaying;
@@ -2464,7 +2530,7 @@ void updateReadOnlyControlTable(uint32_t now_ms) {
   ctSetU8(ADDR_FLASH_RESULT, gFlashLastResult);
 
   // Keep writable mirrors coherent with runtime in case of timeouts or OSC-side changes.
-  if (gTorch.ready() && !gTorch.isOn()) {
+  if ((gTorch.ready() || gNeoTorch.ready()) && !gTorch.isOn() && !gNeoTorch.isOn()) {
     gCtl.flashlight_raw = 0u;
   }
   ctSetU16(ADDR_FLASHLIGHT, gCtl.flashlight_raw);
@@ -2530,11 +2596,13 @@ void setTorchCommandRaw(uint16_t level_raw, uint32_t timeout_ms, bool trigger_so
 
   if (level_raw == 0u) {
     gTorch.setOff();
+    gNeoTorch.setOff();
     return;
   }
 
   const float level = raw1000ToNorm(level_raw);
   gTorch.turnOn(level, timeout_ms);
+  gNeoTorch.turnOn(level, timeout_ms);
   if (trigger_sound) {
     playLampSoundForTimeout(timeout_ms);
   }
@@ -2864,11 +2932,13 @@ void printStatus(Print& out) {
   out.print(F(" ears.goalR="));
   out.print(gAntennaBus.right_goal);
   out.print(F(" torch="));
-  out.print(gTorch.isOn() ? F("on") : F("off"));
+  out.print((gTorch.isOn() || gNeoTorch.isOn()) ? F("on") : F("off"));
   out.print(F(" torch.level="));
-  out.print(gTorch.level(), 3);
+  out.print(gTorch.ready() ? gTorch.level() : gNeoTorch.level(), 3);
   out.print(F(" torch.timeout_ms="));
-  out.print(gTorch.timeoutRemainingMs(now_ms));
+  out.print(gTorch.ready() ? gTorch.timeoutRemainingMs(now_ms) : gNeoTorch.timeoutRemainingMs(now_ms));
+  out.print(F(" torch.neo="));
+  out.print(gNeoTorch.ready() ? F("yes") : F("no"));
   out.print(F(" volume="));
   out.print(gAudio.master_volume, 3);
   out.print(F(" sd="));
@@ -3115,6 +3185,7 @@ void printHelp(Print& out) {
   out.println(F("  /flash/import <sd_path> <asset_name> | /flash/export <asset_name> <sd_path>"));
   out.println(F("  /flash/import/antenna [sd_path] | /flash/import/warbler [sd_path] | /flash/clear/antenna"));
   out.println(F("  /status"));
+  out.println(F("  /reboot"));
   out.println(F("  help"));
   out.println();
 }
@@ -3254,7 +3325,7 @@ bool dispatchTorchCommand(const char* line, Print& out) {
 
   if (strcmp(line, "/torch/off") == 0) {
     setTorchCommandRaw(0, gCtl.flashlight_timeout_ms, false);
-    out.println(gTorch.ready() ? F("OK") : F("ERR torch unavailable"));
+    out.println((gTorch.ready() || gNeoTorch.ready()) ? F("OK") : F("ERR torch unavailable"));
     return true;
   }
 
@@ -3265,13 +3336,14 @@ bool dispatchTorchCommand(const char* line, Print& out) {
 
   if (strncmp(line, "/torch/level ", 13) == 0) {
     const float level = clampf(strtof(line + 13, nullptr), 0.0f, 1.0f);
-    setTorchCommandRaw(normToRaw1000(level), gCtl.flashlight_timeout_ms, level > 0.0f);
-    out.println(gTorch.ready() ? F("OK") : F("ERR torch unavailable"));
+    gCtl.flashlight_preset_raw = normToRaw1000(level);
+    out.print(F("OK level="));
+    out.println(level, 3);
     return true;
   }
 
   if ((strcmp(line, "/torch/on") == 0) || (strncmp(line, "/torch/on ", 10) == 0)) {
-    float level = 1.0f;
+    float level = raw1000ToNorm(gCtl.flashlight_preset_raw);
     uint32_t timeout_ms = kTorchDefaultTimeoutMs;
 
     if (line[9] == ' ') {
@@ -3292,7 +3364,7 @@ bool dispatchTorchCommand(const char* line, Print& out) {
     }
 
     setTorchCommandRaw(normToRaw1000(level), timeout_ms, true);
-    out.println(gTorch.ready() ? F("OK") : F("ERR torch unavailable"));
+    out.println((gTorch.ready() || gNeoTorch.ready()) ? F("OK") : F("ERR torch unavailable"));
     return true;
   }
 
@@ -3569,6 +3641,14 @@ void handleLine(const char* line, Print& out) {
     return;
   }
 
+  if (strcmp(line, "/reboot") == 0) {
+    out.println(F("OK rebooting..."));
+    out.flush();
+    delay(50);
+    SCB_AIRCR = 0x05FA0004;
+    return;
+  }
+
   if (dispatchEyeCommand(line, out)) return;
   if (dispatchAntennaCommand(line, out)) return;
   if (dispatchTorchCommand(line, out)) return;
@@ -3643,6 +3723,7 @@ void setup() {
   gPeripheralNode.begin(kPeripheralDxlBaud);
 
   gTorch.begin();
+  gNeoTorch.begin();
 
   initializeControlTable();
 
@@ -3746,7 +3827,7 @@ void setup() {
     SerialUSB1.println(gTorch.address(), HEX);
 #endif
   } else {
-    printlnBoth(F("Torch MCP4728 not found; /torch/* and ADDR_FLASHLIGHT will report unavailable"));
+    printlnBoth(F("Torch MCP4728 not found; using NeoPixel torch on kTorchLedPin"));
   }
 
   printFlashStatus(Serial);
@@ -3771,6 +3852,7 @@ void loop() {
   serviceEyes(now_ms);
   serviceAntenna(now_ms);
   gTorch.service(now_ms);
+  gNeoTorch.service(now_ms);
   serviceClipPlayers();
   serviceAntennaWhine(now_ms);
   updateReadOnlyControlTable(now_ms);
