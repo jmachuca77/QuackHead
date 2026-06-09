@@ -1,0 +1,19 @@
+#!/bin/bash
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -firmware)
+      FIRMWARE="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [-firmware <hex-file>]"
+      exit 1
+      ;;
+  esac
+done
+if [ -n "$FIRMWARE" ]; then
+  /usr/local/bin/teensy_loader_cli -w -s --mcu=teensy41 -v $FIRMWARE
+else
+  echo Skipping firmware update
+fi
