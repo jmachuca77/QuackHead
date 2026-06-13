@@ -1,0 +1,7 @@
+{
+  "name": "Dynamixel",
+  "version": "1.0.0",
+  "description": "ROBOTIS Dynamixel Protocol 2.0 master library ported for QuackHead (Teensy 4.1)",
+  "frameworks": "arduino",
+  "platforms": "teensy"
+}

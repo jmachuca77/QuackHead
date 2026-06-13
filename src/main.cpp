@@ -25,6 +25,8 @@
 #include "LedMatrixEyes.h"
 #include "AudioFrequencyBitmap.h"
 #include "pin_map.h"
+#include "DynamixelBus.h"
+#include "AntennaConfig.h"
 
 #ifndef EXTMEM
 #define EXTMEM
@@ -51,30 +53,17 @@ constexpr uint32_t kAntennaKeepAliveMs = 500;
 constexpr uint32_t kTorchDefaultTimeoutMs = 6000;
 constexpr uint32_t kTorchI2cClockHz = 400000;
 
-constexpr uint8_t kAntennaLeftId  = 4;
-constexpr uint8_t kAntennaRightId = 5;
-constexpr uint32_t kAntennaBaud = 4000000;
+// Antenna parameters now come from AntennaConfig.h (generated from configs/default.yaml).
+// Access via: antenna_config::getDefault()
+static inline const antenna_config::AntennaConfig& antennaCfg() {
+  return antenna_config::getDefault();
+}
 
 constexpr uint8_t kPeripheralDxlId = 10;
 constexpr uint32_t kPeripheralDxlBaud = 4000000;
 constexpr size_t kPeripheralDxlMaxPacket = 256;
 
-// Tune these on-bench if the ears move the wrong direction or sit off-center.
-constexpr int32_t kAntennaCenterLeft  = 1500;
-constexpr int32_t kAntennaCenterRight = 2450;
-constexpr int8_t  kAntennaSignLeft    = +1;
-constexpr int8_t  kAntennaSignRight   = -1;
-constexpr int32_t kAntennaTravelCounts = 520;
-constexpr int32_t kAntennaMinCounts = 1000;
-constexpr int32_t kAntennaMaxCounts = 3000;
-
-constexpr uint32_t kProfileAcceleration = 50;
-constexpr uint32_t kProfileVelocity = 120;
-
 constexpr uint16_t kDxlAddrTorqueEnable = 64;
-constexpr uint16_t kDxlAddrStatusReturnLevel = 68;
-constexpr uint16_t kDxlAddrProfileAcceleration = 108;
-constexpr uint16_t kDxlAddrProfileVelocity = 112;
 constexpr uint16_t kDxlAddrGoalPosition = 116;
 
 constexpr uint16_t kMcp4728AddrMin = 0x60;
@@ -746,14 +735,23 @@ class AntennaShow {
   float leftNorm() const { return left_norm_; }
   float rightNorm() const { return right_norm_; }
 
-  int32_t leftGoal() const { return normToCounts(left_norm_, kAntennaCenterLeft, kAntennaSignLeft); }
-  int32_t rightGoal() const { return normToCounts(right_norm_, kAntennaCenterRight, kAntennaSignRight); }
+  int32_t leftGoal() const {
+    const auto& cfg = antennaCfg();
+    return normToCounts(left_norm_, cfg.joints[0].center, cfg.joints[0].sign,
+                        cfg.joints[0].travel, cfg.joints[0].min_counts, cfg.joints[0].max_counts);
+  }
+  int32_t rightGoal() const {
+    const auto& cfg = antennaCfg();
+    return normToCounts(right_norm_, cfg.joints[1].center, cfg.joints[1].sign,
+                        cfg.joints[1].travel, cfg.joints[1].min_counts, cfg.joints[1].max_counts);
+  }
 
  private:
-  static int32_t normToCounts(float v_norm, int32_t center, int8_t sign) {
+  static int32_t normToCounts(float v_norm, int32_t center, int8_t sign,
+                              int32_t travel, int32_t min_counts, int32_t max_counts) {
     const float clamped = clampf(v_norm, -1.0f, 1.0f);
-    const int32_t pos = center + (int32_t)lroundf((float)sign * clamped * (float)kAntennaTravelCounts);
-    return clampi32(pos, kAntennaMinCounts, kAntennaMaxCounts);
+    const int32_t pos = center + (int32_t)lroundf((float)sign * clamped * (float)travel);
+    return clampi32(pos, min_counts, max_counts);
   }
 
   void maybeStartTwitch(uint8_t side, uint32_t now_ms) {
@@ -1971,7 +1969,7 @@ class LoopingPsramPlayer {
 };
 
 EyeDriver gEyes;
-DynamixelTtlMasterBus gAntennaBusMaster(Serial7, qh4::kTXEN);
+DYNAMIXEL::DynamixelBus gAntennaBusMaster(Serial7, qh4::kTXEN);
 TorchDriver gTorch;
 NeoPixelTorch<qh4::kTorchLedPin> gNeoTorch;
 AntennaShow gAntenna;
@@ -2027,8 +2025,8 @@ LoopingPsramPlayer gAntennaLoopLeftPlayer(gAntennaLoopLeftQueue, gAntennaLoopAss
 LoopingPsramPlayer gAntennaLoopRightPlayer(gAntennaLoopRightQueue, gAntennaLoopAsset);
 
 struct AntennaBusState {
-  int32_t left_goal = kAntennaCenterLeft;
-  int32_t right_goal = kAntennaCenterRight;
+  int32_t left_goal = 0;
+  int32_t right_goal = 0;
   int32_t last_sent_left = INT32_MIN;
   int32_t last_sent_right = INT32_MIN;
   uint32_t next_update_ms = 0;
@@ -2042,8 +2040,8 @@ struct AudioState {
   bool usb_enabled = true;
   float whine_left_amp = 0.0f;
   float whine_right_amp = 0.0f;
-  int32_t last_whine_left_goal = kAntennaCenterLeft;
-  int32_t last_whine_right_goal = kAntennaCenterRight;
+  int32_t last_whine_left_goal = 0;
+  int32_t last_whine_right_goal = 0;
   uint32_t last_whine_ms = 0;
   uint16_t active_aux_index = 0;
   uint32_t active_aux_arg0 = 0;
@@ -2778,36 +2776,37 @@ uint8_t applyControlTableWrite(uint16_t addr, uint16_t len) {
 }
 
 void initAntennaBus() {
-  gAntennaBusMaster.begin(kAntennaBaud);
+  const auto& cfg = antennaCfg();
+  gAntennaBusMaster.begin(cfg.bus.baud);
   delay(20);
 
-  gAntennaBus.left_goal = kAntennaCenterLeft;
-  gAntennaBus.right_goal = kAntennaCenterRight;
+  gAntennaBus.left_goal = cfg.joints[0].center;
+  gAntennaBus.right_goal = cfg.joints[1].center;
 
-  const uint8_t torque_on = 1;
-  const uint8_t return_level = 1;
-  uint8_t left_goal[4];
-  uint8_t right_goal[4];
-  uint8_t accel[4];
-  uint8_t vel[4];
-  dxl::writeLe32(left_goal, (uint32_t)gAntennaBus.left_goal);
-  dxl::writeLe32(right_goal, (uint32_t)gAntennaBus.right_goal);
-  dxl::writeLe32(accel, kProfileAcceleration);
-  dxl::writeLe32(vel, kProfileVelocity);
-
-  const DxlBulkWriteEntry init_entries[] = {
-    {kAntennaLeftId,  kDxlAddrStatusReturnLevel, 1, &return_level},
-    {kAntennaRightId, kDxlAddrStatusReturnLevel, 1, &return_level},
-    {kAntennaLeftId,  kDxlAddrProfileAcceleration, 4, accel},
-    {kAntennaRightId, kDxlAddrProfileAcceleration, 4, accel},
-    {kAntennaLeftId,  kDxlAddrProfileVelocity, 4, vel},
-    {kAntennaRightId, kDxlAddrProfileVelocity, 4, vel},
-    {kAntennaLeftId,  kDxlAddrGoalPosition, 4, left_goal},
-    {kAntennaRightId, kDxlAddrGoalPosition, 4, right_goal},
-    {kAntennaLeftId,  kDxlAddrTorqueEnable, 1, &torque_on},
-    {kAntennaRightId, kDxlAddrTorqueEnable, 1, &torque_on},
-  };
-  gAntennaBusMaster.bulkWrite(init_entries, sizeof(init_entries) / sizeof(init_entries[0]));
+  // Ping and configure each antenna joint using the ROBOTIS library
+  for (uint8_t i = 0; i < cfg.joint_count; ++i) {
+    const auto& joint = cfg.joints[i];
+    if (!gAntennaBusMaster.ping(joint.id)) {
+      printBoth(F("WARN: Antenna DXL id="));
+      printBoth(joint.id);
+      printlnBoth(F(" not responding"));
+      continue;
+    }
+    // Set return delay time
+    gAntennaBusMaster.setReturnDelayTime(joint.id, joint.return_delay_time);
+    // Set operating mode
+    gAntennaBusMaster.setOperatingMode(joint.id, (DYNAMIXEL::DxlOperatingMode)joint.mode);
+    // Set PID gains
+    gAntennaBusMaster.setPositionPGain(joint.id, joint.kp);
+    gAntennaBusMaster.setPositionIGain(joint.id, joint.ki);
+    gAntennaBusMaster.setPositionDGain(joint.id, joint.kd);
+    // Set profile
+    gAntennaBusMaster.setProfileAcceleration(joint.id, joint.profile_acceleration);
+    gAntennaBusMaster.setProfileVelocity(joint.id, joint.profile_velocity);
+    // Set initial goal position and enable torque
+    gAntennaBusMaster.setGoalPosition(joint.id, (float)joint.center, DYNAMIXEL::UNIT_RAW);
+    gAntennaBusMaster.torqueOn(joint.id);
+  }
 
   gAntennaBus.last_sent_left = gAntennaBus.left_goal;
   gAntennaBus.last_sent_right = gAntennaBus.right_goal;
@@ -2834,28 +2833,27 @@ void serviceHeartbeat(uint32_t now_ms) {
 }
 
 void serviceAntenna(uint32_t now_ms) {
+  const auto& cfg = antennaCfg();
   gAntenna.tick(now_ms, 0.0f);
   gAntennaBus.left_goal = gAntenna.leftGoal();
   gAntennaBus.right_goal = gAntenna.rightGoal();
 
   if (!gAntennaBus.configured) return;
   if (now_ms < gAntennaBus.next_update_ms) return;
-  gAntennaBus.next_update_ms = now_ms + kAntennaUpdateMs;
+  gAntennaBus.next_update_ms = now_ms + cfg.update_interval_ms;
 
   const bool changed = (gAntennaBus.left_goal != gAntennaBus.last_sent_left) ||
                        (gAntennaBus.right_goal != gAntennaBus.last_sent_right);
-  const bool keepalive = (now_ms - gAntennaBus.last_send_ms) >= kAntennaKeepAliveMs;
+  const bool keepalive = (now_ms - gAntennaBus.last_send_ms) >= cfg.keepalive_ms;
   if (!changed && !keepalive) return;
 
+  // Use raw writes for speed (no response expected)
   uint8_t left_goal[4];
   uint8_t right_goal[4];
   dxl::writeLe32(left_goal, (uint32_t)gAntennaBus.left_goal);
   dxl::writeLe32(right_goal, (uint32_t)gAntennaBus.right_goal);
-  const DxlBulkWriteEntry goal_entries[] = {
-    {kAntennaLeftId,  kDxlAddrGoalPosition, 4, left_goal},
-    {kAntennaRightId, kDxlAddrGoalPosition, 4, right_goal},
-  };
-  gAntennaBusMaster.bulkWrite(goal_entries, sizeof(goal_entries) / sizeof(goal_entries[0]));
+  gAntennaBusMaster.writeNoResp(cfg.joints[0].id, kDxlAddrGoalPosition, left_goal, 4);
+  gAntennaBusMaster.writeNoResp(cfg.joints[1].id, kDxlAddrGoalPosition, right_goal, 4);
   gAntennaBus.last_sent_left = gAntennaBus.left_goal;
   gAntennaBus.last_sent_right = gAntennaBus.right_goal;
   gAntennaBus.last_send_ms = now_ms;
@@ -3193,15 +3191,6 @@ void printHelp(Print& out) {
 bool dispatchEyeCommand(const char* line, Print& out) {
   if (line == nullptr) return false;
 
-  if (strncmp(line, "/eye", 4) == 0) {
-    const bool handled = gEyes.handleOscCommand(line, &out);
-    gCtl.eye_brightness = gEyes.left().brightness();
-    gCtl.eye_effort = normToRaw1000(gEyes.left().narrow());
-    gCtl.eye_mode = (uint8_t)gEyes.left().mode();
-    mirrorWritableShadowToControlTable();
-    return handled;
-  }
-
   if (strncmp(line, "/eyes/", 6) == 0) {
     const char* rest = line + 6;
     if (strcmp(rest, "on") == 0) {
@@ -3223,6 +3212,15 @@ bool dispatchEyeCommand(const char* line, Print& out) {
     char mapped[kLineBufLen];
     snprintf(mapped, sizeof(mapped), "/eye/%s", rest);
     const bool handled = gEyes.handleOscCommand(mapped, &out);
+    gCtl.eye_brightness = gEyes.left().brightness();
+    gCtl.eye_effort = normToRaw1000(gEyes.left().narrow());
+    gCtl.eye_mode = (uint8_t)gEyes.left().mode();
+    mirrorWritableShadowToControlTable();
+    return handled;
+  }
+
+  if (strncmp(line, "/eye", 4) == 0 && (line[4] == 0 || line[4] == '/')) {
+    const bool handled = gEyes.handleOscCommand(line, &out);
     gCtl.eye_brightness = gEyes.left().brightness();
     gCtl.eye_effort = normToRaw1000(gEyes.left().narrow());
     gCtl.eye_mode = (uint8_t)gEyes.left().mode();

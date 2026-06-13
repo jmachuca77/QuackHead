@@ -1,0 +1,43 @@
+# QuackHead Antenna Dynamixel Configuration
+# Modeled after PuddleDuck's YAML config approach.
+
+antenna:
+  bus:
+    adapter: Serial7
+    baud: 4000000
+    txen_pin: 32          # qh4::kTXEN
+
+  joints:
+    -
+      name: "left_antenna"
+      id: 4
+      mode: Position
+      center: 1500        # raw position counts at center
+      sign: 1             # +1 or -1 to flip direction
+      travel: 520         # counts of travel from center
+      min_counts: 1000
+      max_counts: 3000
+      kp: 400
+      ki: 0
+      kd: 150
+      profile_acceleration: 50
+      profile_velocity: 120
+      return_delay_time: 0
+    -
+      name: "right_antenna"
+      id: 5
+      mode: Position
+      center: 2450        # raw position counts at center
+      sign: -1            # +1 or -1 to flip direction
+      travel: 520         # counts of travel from center
+      min_counts: 1000
+      max_counts: 3000
+      kp: 400
+      ki: 0
+      kd: 150
+      profile_acceleration: 50
+      profile_velocity: 120
+      return_delay_time: 0
+
+  update_interval_ms: 20
+  keepalive_ms: 500
