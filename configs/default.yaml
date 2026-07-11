@@ -12,14 +12,14 @@ antenna:
       name: "left_antenna"
       id: 4
       mode: Position
-      center: 1500        # raw position counts at center
+      center: 2048        # raw position counts at center
       sign: 1             # +1 or -1 to flip direction
       travel: 520         # counts of travel from center
-      min_counts: 1000
-      max_counts: 3000
-      kp: 400
+      min_counts: 1200
+      max_counts: 2895
+      kp: 800
       ki: 0
-      kd: 150
+      kd: 0
       profile_acceleration: 50
       profile_velocity: 120
       return_delay_time: 0
@@ -27,14 +27,14 @@ antenna:
       name: "right_antenna"
       id: 5
       mode: Position
-      center: 2450        # raw position counts at center
+      center: 2048        # raw position counts at center
       sign: -1            # +1 or -1 to flip direction
       travel: 520         # counts of travel from center
-      min_counts: 1000
-      max_counts: 3000
-      kp: 400
+      min_counts: 1200
+      max_counts: 2895
+      kp: 800
       ki: 0
-      kd: 150
+      kd: 0
       profile_acceleration: 50
       profile_velocity: 120
       return_delay_time: 0
